@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net48</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<Platforms>AnyCPU;x64</Platforms>
+	</PropertyGroup>
+	<ItemGroup>
+		<Reference Include="Assembly-CSharp">
+			<HintPath>..\REFERENCES\Assembly-CSharp.dll</HintPath>
+		</Reference>
+		<Reference Include="Assembly-CSharp-firstpass">
+			<HintPath>..\REFERENCES\Assembly-CSharp-firstpass.dll</HintPath>
+		</Reference>
+		<Reference Include="Exiled.API">
+			<HintPath>..\REFERENCES\Exiled.API.dll</HintPath>
+		</Reference>
+		<Reference Include="Exiled.CustomRoles">
+			<HintPath>..\REFERENCES\Exiled.CustomRoles.dll</HintPath>
+		</Reference>
+		<Reference Include="Exiled.Events">
+			<HintPath>..\REFERENCES\Exiled.Events.dll</HintPath>
+		</Reference>
+		<Reference Include="NorthwoodLib">
+			<HintPath>..\REFERENCES\NorthwoodLib.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.CoreModule">
+		  <HintPath>..\REFERENCES\UnityEngine.CoreModule.dll</HintPath>
+		</Reference>
+		<!-- OTO NASZA NOWA BIBLIOTEKA UNITY -->
+	</ItemGroup>
+</Project>
