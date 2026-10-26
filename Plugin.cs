@@ -7,7 +7,7 @@ namespace ScpEscapeSystem
     {
         public override string Name => "ScpEscapeSystem";
         public override string Author => "Matysiak";
-        public override Version Version => new Version(1, 0, 0);
+        public override Version Version => new Version(1, 3, 0);
 
         public static Plugin Instance { get; private set; } = null!;
         private EventHandlers _handlers = null!;
@@ -22,6 +22,7 @@ namespace ScpEscapeSystem
             Exiled.Events.Handlers.Server.RespawningTeam += _handlers.OnRespawningTeam;
             Exiled.Events.Handlers.Server.EndingRound += _handlers.OnEndingRound;
             Exiled.Events.Handlers.Server.RoundStarted += _handlers.OnRoundStarted;
+            Exiled.Events.Handlers.Server.RestartingRound += _handlers.OnRestartingRound;
 
             base.OnEnabled();
         }
@@ -33,6 +34,7 @@ namespace ScpEscapeSystem
             Exiled.Events.Handlers.Server.RespawningTeam -= _handlers.OnRespawningTeam;
             Exiled.Events.Handlers.Server.EndingRound -= _handlers.OnEndingRound;
             Exiled.Events.Handlers.Server.RoundStarted -= _handlers.OnRoundStarted;
+            Exiled.Events.Handlers.Server.RestartingRound -= _handlers.OnRestartingRound;
 
             _handlers = null!;
             Instance = null!;
