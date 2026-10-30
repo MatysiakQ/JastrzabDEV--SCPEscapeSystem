@@ -1,0 +1,37 @@
+name: Publish release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/release.yml'
+      - 'scripts/publish_release.py'
+      - 'release-notes/**'
+      - 'dist/**'
+      - 'SCPRUN.csproj'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run regression tests
+        run: dotnet run --project tests/Regression/Regression.csproj --configuration Release
+      - name: Verify artifacts and publish the tagged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_release.py
