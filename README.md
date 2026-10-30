@@ -1,129 +1,107 @@
-<div align="center">
+# SCP Escape System
 
-# 🏃‍♂️ SCP Escape System
-**An EXILED plugin that allows SCPs to escape the facility and survive. / Plugin EXILED pozwalający SCP uciec z placówki.**
+Plugin EXILED umożliwiający SCP ucieczkę przez standardową strefę Class-D/Naukowców i zmianę w Chaos Conscript.
 
-[![EXILED](https://img.shields.io/badge/EXILED-9.0%2B-blue.svg)](#)
-[![SCP:SL](https://img.shields.io/badge/SCP:SL-latest-green.svg)](#)
-[![Version](https://img.shields.io/badge/Version-1.3.0-orange.svg)](#)
-[![Downloads](https://img.shields.io/github/downloads/TwojaNazwaUzytkownika/ScpEscapeSystem/total.svg)](https://github.com/TwojaNazwaUzytkownika/ScpEscapeSystem/releases)
-[![License](https://img.shields.io/badge/License-MIT-red.svg)](#)
+**Source version: 1.4.0 · .NET Framework 4.8 · compiled against EXILED 9.12.6**
 
-</div>
+[Releases](https://github.com/MatysiakQ/JastrzabDEV--SCPEscapeSystem/releases) · [Build instructions](docs/BUILD.md) · [Changelog](CHANGELOG.md)
 
----
+Build 1.4.0: [ScpEscapeSystem.dll](dist/ScpEscapeSystem.dll) · [SHA-256](dist/SHA256SUMS.txt) · [build information](dist/BUILDINFO.json). This build has not been smoke-tested on a running game server.
 
-# 🇬🇧 English
+## Polski
 
-## 📖 About
-Tired of SCPs camping on the surface waiting for the round to end? **SCP Escape System** changes the late-game dynamics. It lets SCPs (including SCP-049-2 and Custom Roles) escape the facility through the standard Class-D/Scientist escape zone.
+### Działanie
 
-To maintain balance, the exterior gates stay locked until the first MTF or Chaos Insurgency wave arrives. Once the gates are open, an escaping SCP becomes a **Chaos Insurgency Conscript**, a global broadcast is shown, and the end-of-round result is adjusted.
+- Droga ucieczki otwiera się po zakończonej fali, w której faktycznie odrodzili się żywi gracze MTF lub Chaos. Anulowana lub pusta fala jej nie odblokowuje.
+- Dozwolony SCP w strefie ucieczki zmienia się w **Chaos Conscript**. Sukces i komunikat są zatwierdzane dopiero po skutecznej zmianie klasy oraz usunięciu zarejestrowanych ról customowych.
+- SCP-079 transferuje się, gdy wcześniej uciekł przynajmniej jeden SCP, a komputer jest jedynym żywym SCP. Sprawdzane są zakończone śmierci, zmiany klas i rozłączenia. Anulowana śmierć nie jest odejściem SCP.
+- Jeśli uciekł SCP, wynik to **Anomalie**, a jeżeli potwierdzono też ucieczkę Class-D lub Naukowca — **remis**. Ta reguła jest celowym ustawieniem balansu.
+- Konwersje SCP nie są naliczane jako ucieczki Class-D. Dla integracji służą osobne zdarzenia opisane poniżej.
+- Przeładowanie pluginu zachowuje stan bieżącej rundy w tej samej scenie. Nowa runda resetuje stan. Dane nie są zapisywane na dysku.
+- Wskazówki i ponawianie anulowanych prób mają ograniczoną częstotliwość.
 
-## ✨ Features
+### Instalacja
 
-* 🚪 **Balanced escape mechanics:** SCPs cannot escape from the start of the round. The route unlocks on the first MTF/Chaos respawn wave (a respawn cancelled by another plugin does not unlock it).
-* 🎭 **Custom Role support:** works with `Exiled.CustomRoles`. Registered custom roles on the SCP team are recognized automatically and may escape.
-* 🧟 **Zombie support:** SCP-049-2 is on the default allowed list and becomes a Chaos Conscript when it escapes.
-* 💻 **SCP-079 network transfer:** SCP-079 cannot walk out, so it "transfers" under these conditions: **at least one SCP has already escaped** and SCP-079 is **the last living SCP** in the facility (it does not matter whether the last other SCP escaped or died). SCP-079 then also becomes a Chaos Conscript. If nobody escaped, there is no transfer and no broadcast, and the standard game behavior applies.
-* 🏆 **End-round logic:** if at least one SCP escaped, the plugin overrides the result: **Draw** if humans also escaped, otherwise **Anomalies win**.
-* 💬 **Customizable messages:** hints and global broadcasts are configurable (rich text supported).
+1. Zainstaluj EXILED z modułem `Exiled.CustomRoles`.
+2. Zbuduj aktualne źródła zgodnie z [instrukcją](docs/BUILD.md) albo użyj DLL odpowiadającej tej wersji. Starsze pliki w Releases mogą pochodzić z wcześniejszych wersji.
+3. Usuń poprzednią DLL tego pluginu, także jeśli nazywa się `SCPRUN.dll`.
+4. Umieść **`ScpEscapeSystem.dll`** w `EXILED/Plugins` i zrestartuj serwer.
+5. Edytuj sekcję **`scp_escape_system`** w konfiguracji EXILED.
 
-## 📋 Requirements
-* **SCP: Secret Laboratory** server with **EXILED 9.x** (the plugin was built against 9.12.6, target framework .NET Framework 4.8).
-* **Exiled.CustomRoles** (`Exiled.CustomRoles.dll`) must be present in `EXILED/Plugins`. It is required by the plugin. It normally ships with the standard EXILED release, but if the plugin fails to load, check that this file is there.
+Przy aktualizacji zachowaj istniejące komunikaty. Puste komunikaty wyłączają ich wyświetlanie. Nie trzeba usuwać całej konfiguracji.
 
-## 🚀 Installation
+### Konfiguracja
 
-1. Install EXILED (with `Exiled.CustomRoles` in `EXILED/Plugins`).
-2. Download the latest `ScpEscapeSystem.dll` from the [Releases](https://github.com/TwojaNazwaUzytkownika/ScpEscapeSystem/releases) page.
-3. Put the file into your plugins folder:
-   * Windows: `%AppData%\EXILED\Plugins`
-   * Linux: `~/.config/EXILED/Plugins`
-4. Restart the server. The config is generated on first start.
-5. Edit the `scp_escape_system` section (the plugin does not set a custom prefix, so the key is derived from its name) in `EXILED/Configs/<PORT>-config.yml`, or in `EXILED/Configs/Plugins/` if separate configs are enabled. Restart afterwards.
+| Klucz | Domyślnie | Znaczenie |
+| --- | --- | --- |
+| `is_enabled` | `true` | Włączenie pluginu. |
+| `debug` | `false` | Ustawienie debugowania EXILED. |
+| `allowed_scps` | 049, 049-2, 096, 106, 173, 939, 3114 | Dozwolone bazowe role SCP. |
+| `allow_custom_roles` | `true` | Zarejestrowane CustomRoles z drużyny SCP mogą uciekać także poza listą bazową. |
+| `escape_retry_seconds` | `2` | Odstęp między ponowieniami próby ucieczki. |
+| `locked_hint_interval` | `3` | Odstęp między hintami zamkniętej drogi. |
+| `escape_locked_hint` | komunikat angielski | Hint przed odblokowaniem. |
+| `gates_opened_broadcast` | komunikat angielski | Broadcast o odblokowaniu. |
+| `scp_escaped_broadcast` | komunikat angielski | Sukces fizycznej ucieczki; `{scp}` to nazwa roli. |
+| `scp079_transferred_broadcast` | komunikat angielski | Sukces transferu SCP-079. |
 
-### 🔄 Updating from older versions
-Replace the DLL. A new field `gates_opened_broadcast` was added in v1.1.0. If the new field doesn't appear in your config, delete the plugin's config section/file so it regenerates.
+Ustaw oba pola `allowed_scps: []` i `allow_custom_roles: false`, aby wyłączyć fizyczne ucieczki wszystkich SCP. SCP-079 ma osobną regułę transferu, wymagającą wcześniejszego sukcesu SCP w tej rundzie.
 
-## ⚙️ Configuration
+### Weryfikacja i ograniczenia
 
-| Config option | Default value | Description |
-| :--- | :--- | :--- |
-| `is_enabled` | `true` | Enables or disables the plugin. |
-| `debug` | `false` | Enables debug messages in the console. |
-| `allowed_scps` | `Scp049, Scp0492, Scp096, Scp106, Scp173, Scp939, Scp3114` | Base-game SCPs allowed to escape. *(Custom Roles are allowed by default.)* SCP-079 is not on this list on purpose; it escapes only through the transfer rule above. |
-| `escape_locked_hint` | `<b><color=orange>[SYSTEM]</color></b>...` | Hint shown if an SCP enters the escape zone before the gates open. |
-| `gates_opened_broadcast` | `<b><size=40><color=red>[SYSTEM]</color></size></b>...` | Broadcast shown to living SCPs when the gates open (first MTF/Chaos wave). |
-| `scp_escaped_broadcast` | `<b><size=40><color=red>[WARNING]</color></size></b>...` | Global message when an SCP escapes. `{scp}` is replaced with the role name. |
-| `scp079_transferred_broadcast` | `<b><size=40><color=#00FFFF>[NETWORK TRANSFER]</color></size></b>...` | Global message when SCP-079 transfers outside the facility. |
+Testy regresji używają zastępczego API. Nie uruchamiają klientów, Unity, natywnej kolejki recontainmentu ani kodu umiejętności innych pluginów. Zweryfikuj na serwerze SCP-079 i każdy własny SCP, szczególnie sprzątanie modeli, audio i umiejętności. Nie deklarujemy automatycznie zgodności ze wszystkimi przyszłymi wersjami gry lub EXILED.
 
-> The role given after escaping (Chaos Conscript) is fixed in the code and is not configurable. Broadcast durations are also fixed (7 s for the gate and escape messages, 10 s for the SCP-079 message).
+## English
 
-## ⚠️ Known limitations
-* If an SCP **disconnects** from the server, SCP-079's transfer check is not triggered (only deaths and escapes are checked).
-* The plugin relies on the game's standard escape trigger, so the escape zone works like for Class-D/Scientists.
+### Behavior
 
-## 🤝 Contributing
-Feel free to open an issue or submit a pull request if you want to add features or report bugs!
+The escape route unlocks only after a completed wave has actual living MTF/Chaos players. Allowed physical SCPs entering the normal escape zone become Chaos Conscripts. A cancelled or failed class change awards no success.
 
----
+After at least one confirmed SCP escape, SCP-079 transfers when it is the only living SCP. Completed deaths, class changes and disconnects trigger re-evaluation. Cancelled deaths do not remove a teammate.
 
-# 🇵🇱 Polski
+The round-result rule is unchanged: a confirmed SCP escape means Anomalies win unless a Class-D/Scientist also successfully escaped, in which case the result is a draw. SCP conversions never increment the native Class-D escape counter.
 
-## 📖 O projekcie
-Masz dość SCP, które kampią na powierzchni w oczekiwaniu na koniec rundy? **SCP Escape System** zmienia dynamikę końcówki gry. Pozwala SCP (w tym SCP-049-2 i Custom Roles) uciec z placówki przez standardową strefę ucieczki Class-D/Naukowców.
+Reloading the plugin preserves primitive round state in EXILED session variables for the same scene. New rounds clear it. Hints and failed attempts are throttled; empty messages disable those messages. Registered custom roles are removed after a confirmed conversion with their removal-death flag temporarily suppressed and then restored.
 
-Dla balansu zewnętrzne bramy są zablokowane, dopóki nie pojawi się pierwsza fala MTF lub Chaos Insurgency. Gdy bramy się otworzą, uciekający SCP zmienia się w **Chaos Insurgency Conscript**, pojawia się globalny broadcast, a wynik rundy jest odpowiednio korygowany.
+### Installation and configuration
 
-## ✨ Funkcje
+Install EXILED and its CustomRoles module. Build matching server references using [docs/BUILD.md](docs/BUILD.md). Remove any old `SCPRUN.dll` or duplicate plugin DLL, then install **`ScpEscapeSystem.dll`** into `EXILED/Plugins`. The configuration prefix is explicitly **`scp_escape_system`**.
 
-* 🚪 **Zbalansowana ucieczka:** SCP nie mogą uciec od startu rundy. Droga odblokowuje się przy pierwszej fali respawnu MTF/Chaosu (respawn anulowany przez inny plugin jej nie odblokowuje).
-* 🎭 **Obsługa Custom Roles:** działa z `Exiled.CustomRoles`. Zarejestrowane customowe role z drużyny SCP są rozpoznawane automatycznie i mogą uciec.
-* 🧟 **Obsługa zombie:** SCP-049-2 jest na domyślnej liście dozwolonych i po ucieczce zostaje Chaos Conscriptem.
-* 💻 **Transfer SCP-079:** SCP-079 nie może wyjść na własnych nogach, więc "przesyła się" gdy spełnione są oba warunki: **przynajmniej jeden SCP już uciekł** i SCP-079 jest **ostatnim żywym SCP** w placówce (bez znaczenia, czy ostatni inny SCP uciekł, czy zginął). SCP-079 również zostaje wtedy Chaos Conscriptem. Jeśli nikt nie uciekł, nie ma transferu ani broadcastu, a działa standardowa mechanika gry.
-* 🏆 **Logika końca rundy:** jeśli przynajmniej jeden SCP uciekł, plugin zmienia wynik: **remis**, gdy uciekli też ludzie, w przeciwnym razie **wygrywają Anomalie**.
-* 💬 **Konfigurowalne komunikaty:** hinty i globalne broadcasty możesz zmieniać (obsługa rich text).
+The configuration table above lists exact keys. Existing allowed-role and message keys are preserved. New controls are `allow_custom_roles`, `escape_retry_seconds` and `locked_hint_interval`. Invalid intervals are replaced with defaults; a null list becomes empty. Source version, uploaded release labels and DLL names should be checked together before deployment.
 
-## 📋 Wymagania
-* Serwer **SCP: Secret Laboratory** z **EXILED 9.x** (plugin budowany pod 9.12.6, .NET Framework 4.8).
-* **Exiled.CustomRoles** (`Exiled.CustomRoles.dll`) musi znajdować się w `EXILED/Plugins`. Plugin go wymaga. Zwykle jest w standardowym pakiecie EXILED, ale jeśli plugin się nie ładuje, sprawdź obecność tego pliku.
+### Integration events
 
-## 🚀 Instalacja
+SCP conversions intentionally use `SpawnReason.ForceClass` rather than impersonating human escapes. Vanilla/EXILED `Escaped` remains for real human escapes. Observe or cancel SCP attempts using the plugin instance:
 
-1. Zainstaluj EXILED (z `Exiled.CustomRoles` w `EXILED/Plugins`).
-2. Pobierz najnowszy `ScpEscapeSystem.dll` z zakładki [Releases](https://github.com/TwojaNazwaUzytkownika/ScpEscapeSystem/releases).
-3. Wrzuć plik do folderu pluginów:
-   * Windows: `%AppData%\EXILED\Plugins`
-   * Linux: `~/.config/EXILED/Plugins`
-4. Zrestartuj serwer. Config wygeneruje się przy pierwszym starcie.
-5. Edytuj sekcję `scp_escape_system` (plugin nie ustawia własnego prefixu, więc klucz powstaje z jego nazwy) w `EXILED/Configs/<PORT>-config.yml` albo w `EXILED/Configs/Plugins/`, jeśli masz włączone osobne configi. Po zmianach zrestartuj serwer.
+```csharp
+ScpEscapeSystem.Plugin.Instance.ScpEscaping += OnScpEscaping;
+ScpEscapeSystem.Plugin.Instance.ScpEscaped += OnScpEscaped;
 
-### 🔄 Aktualizacja ze starszych wersji
-Podmień DLL. W v1.1.0 doszło pole `gates_opened_broadcast`. Jeśli nowe pole nie pojawi się w configu, usuń sekcję/plik configu pluginu, żeby wygenerował się od nowa.
+void OnScpEscaping(object sender, ScpEscapeSystem.ScpEscapingEventArgs ev)
+{
+    // ev.Player, ev.OldRole, ev.RoleName, ev.IsNetworkTransfer
+    // ev.IsAllowed = false; // cancel without changing the player's class
+}
 
-## ⚙️ Konfiguracja
+void OnScpEscaped(object sender, ScpEscapeSystem.ScpEscapedEventArgs ev)
+{
+    // Confirmed Chaos class and registered CustomRole cleanup.
+}
+```
 
-| Opcja | Domyślnie | Opis |
-| :--- | :--- | :--- |
-| `is_enabled` | `true` | Włącza lub wyłącza plugin. |
-| `debug` | `false` | Komunikaty debugowania w konsoli. |
-| `allowed_scps` | `Scp049, Scp0492, Scp096, Scp106, Scp173, Scp939, Scp3114` | Bazowe SCP, które mogą uciec. *(Custom Roles są dozwolone domyślnie.)* SCP-079 celowo nie ma na liście, ucieka tylko przez transfer. |
-| `escape_locked_hint` | `<b><color=orange>[SYSTEM]</color></b>...` | Hint, gdy SCP wejdzie w strefę ucieczki przed otwarciem bram. |
-| `gates_opened_broadcast` | `<b><size=40><color=red>[SYSTEM]</color></size></b>...` | Broadcast dla żywych SCP po otwarciu bram (pierwsza fala MTF/Chaos). |
-| `scp_escaped_broadcast` | `<b><size=40><color=red>[WARNING]</color></size></b>...` | Globalny komunikat o ucieczce SCP. `{scp}` zamieniane jest na nazwę roli. |
-| `scp079_transferred_broadcast` | `<b><size=40><color=#00FFFF>[NETWORK TRANSFER]</color></size></b>...` | Globalny komunikat o transferze SCP-079 poza placówkę. |
+Unsubscribe during your plugin's disable lifecycle and rebind after an escape-plugin reload. Any denial or throwing attempt listener cancels the attempt. Exceptions in completion listeners are logged without undoing a committed escape. Native `Escaping.IsAllowed` defaults to false for SCPs, so it cannot reliably distinguish a third-party denial from vanilla's default: use `ScpEscaping` for SCP escape policies.
 
-> Rola nadawana po ucieczce (Chaos Conscript) jest wpisana na stałe w kodzie i nie da się jej zmienić w configu. Czasy broadcastów też są stałe (7 s dla bramy i ucieczki, 10 s dla SCP-079).
+The built-in cleanup handles registered CustomRoles. Independently managed schematics, delayed callbacks and abilities must still be cleaned up by their owning plugin, for example through its role-removed hook. A provider that throws or changes the class during cleanup prevents a success award; provider exceptions are logged. Arbitrary third-party state cannot be rolled back generically.
 
-## ⚠️ Znane ograniczenia
-* Jeśli SCP **rozłączy się** z serwera, sprawdzenie transferu SCP-079 się nie odpali (sprawdzane są tylko śmierci i ucieczki).
-* Plugin korzysta ze standardowego triggera ucieczki z gry, więc strefa ucieczki działa tak jak dla Class-D/Naukowców.
+### Validation
 
-## 🤝 Współpraca
-Śmiało otwieraj Issues lub Pull Requesty z nowymi funkcjami albo zgłoszeniami błędów!
+```sh
+dotnet run --project tests/Regression/Regression.csproj --configuration Release
+```
 
----
-<div align="center">
-  <sub>Created with ❤️ by <b>Matysiak</b></sub>
-</div>
+The tests compile the actual plugin sources against a small API simulation, without game DLLs or external test packages. They verify denial, event ordering, confirmed conversion, counters, CustomRole flags, reloads and stale callbacks. They do not establish Unity/Mono, native SCP-079 recontainment timing or client compatibility. Perform the server smoke tests in [docs/BUILD.md](docs/BUILD.md) before release.
+
+## License
+
+MIT — see [LICENSE.txt](LICENSE.txt).
+

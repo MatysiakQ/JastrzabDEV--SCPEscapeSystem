@@ -1,32 +1,28 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
-		<TargetFramework>net48</TargetFramework>
-		<LangVersion>latest</LangVersion>
-		<Nullable>enable</Nullable>
-		<Platforms>AnyCPU;x64</Platforms>
-	</PropertyGroup>
-	<ItemGroup>
-		<Reference Include="Assembly-CSharp">
-			<HintPath>..\REFERENCES\Assembly-CSharp.dll</HintPath>
-		</Reference>
-		<Reference Include="Assembly-CSharp-firstpass">
-			<HintPath>..\REFERENCES\Assembly-CSharp-firstpass.dll</HintPath>
-		</Reference>
-		<Reference Include="Exiled.API">
-			<HintPath>..\REFERENCES\Exiled.API.dll</HintPath>
-		</Reference>
-		<Reference Include="Exiled.CustomRoles">
-			<HintPath>..\REFERENCES\Exiled.CustomRoles.dll</HintPath>
-		</Reference>
-		<Reference Include="Exiled.Events">
-			<HintPath>..\REFERENCES\Exiled.Events.dll</HintPath>
-		</Reference>
-		<Reference Include="NorthwoodLib">
-			<HintPath>..\REFERENCES\NorthwoodLib.dll</HintPath>
-		</Reference>
-		<Reference Include="UnityEngine.CoreModule">
-		  <HintPath>..\REFERENCES\UnityEngine.CoreModule.dll</HintPath>
-		</Reference>
-		<!-- OTO NASZA NOWA BIBLIOTEKA UNITY -->
-	</ItemGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ScpEscapeSystem</AssemblyName>
+    <RootNamespace>ScpEscapeSystem</RootNamespace>
+    <Version>1.4.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <Platforms>AnyCPU;x64</Platforms>
+    <Deterministic>true</Deterministic>
+    <ReferencesDirectory Condition="'$(ReferencesDirectory)' == ''">$(MSBuildProjectDirectory)/../REFERENCES</ReferencesDirectory>
+    <NetStandardFacade Condition="'$(NetStandardFacade)' == '' and Exists('$(MSBuildToolsPath)/Microsoft/Microsoft.NET.Build.Extensions/net461/lib/netstandard.dll')">$(MSBuildToolsPath)/Microsoft/Microsoft.NET.Build.Extensions/net461/lib/netstandard.dll</NetStandardFacade>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <Reference Include="Assembly-CSharp"><HintPath>$(ReferencesDirectory)/Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Assembly-CSharp-firstpass"><HintPath>$(ReferencesDirectory)/Assembly-CSharp-firstpass.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Exiled.API"><HintPath>$(ReferencesDirectory)/Exiled.API.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Exiled.CustomRoles"><HintPath>$(ReferencesDirectory)/Exiled.CustomRoles.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Exiled.Events"><HintPath>$(ReferencesDirectory)/Exiled.Events.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(ReferencesDirectory)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Mirror"><HintPath>$(ReferencesDirectory)/Mirror.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="netstandard"><HintPath Condition="'$(NetStandardFacade)' != ''">$(NetStandardFacade)</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <Target Name="ValidateServerReferences" BeforeTargets="ResolveReferences">
+    <Error Condition="!Exists('$(ReferencesDirectory)/Exiled.API.dll')" Text="Server references are missing. See docs/BUILD.md and set ReferencesDirectory to your server DLL directory." />
+  </Target>
 </Project>
