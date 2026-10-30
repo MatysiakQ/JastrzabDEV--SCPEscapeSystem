@@ -1,0 +1,16 @@
+{
+  "version": "1.4.0",
+  "assembly": "ScpEscapeSystem.dll",
+  "target_framework": "net48",
+  "platform": "AnyCPU",
+  "compiled_against_exiled": "9.12.6",
+  "sha256": "530df9fbf6a9253f28a0abc2691f678c0cf6f4cf2660d34d9f0ac3667e1b98f8",
+  "regressions": {
+    "passed": 38,
+    "failed": 0,
+    "api": "simulated"
+  },
+  "additional_compile_check": "x64 against available EXILED 9.13.2 references",
+  "build_warning": "MSB3277: native references request netstandard 2.1; net48 build uses the SDK netstandard 2.0 compatibility facade. Server/Mono compatibility must be smoke-tested.",
+  "runtime_server_tested": false
+}
