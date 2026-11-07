@@ -13,3 +13,8 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - run: dotnet run --project tests/Regression/Regression.csproj --configuration Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScpEscapeSystem-build
+          path: artifacts/ScpEscapeSystem.dll
+          if-no-files-found: error
