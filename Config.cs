@@ -1,12 +1,17 @@
-using Exiled.API.Interfaces;
-using PlayerRoles;
 using System.Collections.Generic;
 using System.ComponentModel;
+using Exiled.API.Interfaces;
+using PlayerRoles;
 
 namespace ScpEscapeSystem
 {
     public class Config : IConfig
     {
+        private const float DefaultEscapeRetrySeconds = 2f;
+        private const float DefaultLockedHintInterval = 3f;
+        private const float MinInterval = 0.25f;
+        private const float MaxInterval = 60f;
+
         [Description("Whether or not the plugin is enabled.")]
         public bool IsEnabled { get; set; } = true;
 
@@ -29,10 +34,10 @@ namespace ScpEscapeSystem
         public bool AllowCustomRoles { get; set; } = true;
 
         [Description("Minimum seconds between escape attempts after cancellation or a failed class change.")]
-        public float EscapeRetrySeconds { get; set; } = 2f;
+        public float EscapeRetrySeconds { get; set; } = DefaultEscapeRetrySeconds;
 
         [Description("Minimum seconds between locked-route hints for the same player.")]
-        public float LockedHintInterval { get; set; } = 3f;
+        public float LockedHintInterval { get; set; } = DefaultLockedHintInterval;
 
         [Description("Hint displayed when an SCP enters the escape zone BEFORE MTF/Chaos arrives.")]
         public string EscapeLockedHint { get; set; } = "<b><color=orange>[SYSTEM]</color></b> Escape route is currently locked.\nAwait the opening of the exterior gates...";
@@ -45,6 +50,7 @@ namespace ScpEscapeSystem
 
         [Description("Broadcast message when SCP-079 successfully escapes into the network (when it is the last SCP left and at least one SCP has escaped).")]
         public string Scp079TransferredBroadcast { get; set; } = "<b><size=40><color=#00FFFF>[NETWORK TRANSFER]</color></size></b>\n<size=35><b>SCP-079</b> has successfully transferred its database outside the facility.</size>";
+
         public void Normalize()
         {
             AllowedScps ??= new List<RoleTypeId>();
@@ -52,11 +58,11 @@ namespace ScpEscapeSystem
             GatesOpenedBroadcast ??= string.Empty;
             ScpEscapedBroadcast ??= string.Empty;
             Scp079TransferredBroadcast ??= string.Empty;
-            EscapeRetrySeconds = ValidInterval(EscapeRetrySeconds, 2f);
-            LockedHintInterval = ValidInterval(LockedHintInterval, 3f);
+            EscapeRetrySeconds = ValidInterval(EscapeRetrySeconds, DefaultEscapeRetrySeconds);
+            LockedHintInterval = ValidInterval(LockedHintInterval, DefaultLockedHintInterval);
         }
 
-        internal static float ValidInterval(float value, float fallback) =>
-            float.IsNaN(value) || float.IsInfinity(value) || value < 0.25f || value > 60f ? fallback : value;
+        private static float ValidInterval(float value, float fallback) =>
+            float.IsNaN(value) || value < MinInterval || value > MaxInterval ? fallback : value;
     }
 }

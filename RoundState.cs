@@ -4,47 +4,52 @@ using UnityEngine.SceneManagement;
 
 namespace ScpEscapeSystem
 {
-    // Only BCL values are stored in EXILED, so a newly loaded assembly can read them.
     internal sealed class RoundState
     {
         private const string SessionKey = "ScpEscapeSystem.RoundState.v1";
-        private Dictionary<string, object> values = null!;
+        private const string SceneKey = "scene";
+        private const string UnlockedKey = "unlocked";
+        private const string ScpEscapedKey = "scp";
+        private const string HumanEscapedKey = "human";
 
-        public RoundState()
+        private Dictionary<string, object> values;
+
+        public RoundState() => values = Restore() ?? Create();
+
+        public bool IsEscapeUnlocked => ReadFlag(UnlockedKey);
+        public bool HasScpEscaped => ReadFlag(ScpEscapedKey);
+        public bool HasHumanEscaped => ReadFlag(HumanEscapedKey);
+
+        public void UnlockEscape() => values[UnlockedKey] = true;
+        public void RecordScpEscape() => values[ScpEscapedKey] = true;
+        public void RecordHumanEscape() => values[HumanEscapedKey] = true;
+        public void Reset() => values = Create();
+
+        private static Dictionary<string, object>? Restore()
         {
-            if (Round.IsStarted && !Round.IsEnded &&
-                Server.SessionVariables.TryGetValue(SessionKey, out object? saved) &&
-                saved is Dictionary<string, object> dictionary &&
-                dictionary.TryGetValue("scene", out object? scene) &&
-                scene is int handle && handle == SceneManager.GetActiveScene().handle)
-                values = dictionary;
-            else
-                Reset();
+            if (!Round.IsStarted || Round.IsEnded ||
+                !Server.SessionVariables.TryGetValue(SessionKey, out object? saved) ||
+                saved is not Dictionary<string, object> dictionary ||
+                !dictionary.TryGetValue(SceneKey, out object? scene) ||
+                scene is not int handle || handle != SceneManager.GetActiveScene().handle)
+                return null;
+
+            return dictionary;
         }
 
-        public bool IsEscapeUnlocked
+        private static Dictionary<string, object> Create()
         {
-            get => ReadBool("unlocked");
-            set => values["unlocked"] = value;
-        }
-
-        public bool HasScpEscaped => ReadBool("scp");
-        public bool HasHumanEscaped => ReadBool("human");
-        public void RecordScpEscape() => values["scp"] = true;
-        public void RecordHumanEscape() => values["human"] = true;
-
-        public void Reset()
-        {
-            values = new Dictionary<string, object>
+            var created = new Dictionary<string, object>
             {
-                ["scene"] = SceneManager.GetActiveScene().handle,
-                ["unlocked"] = false,
-                ["scp"] = false,
-                ["human"] = false,
+                [SceneKey] = SceneManager.GetActiveScene().handle,
+                [UnlockedKey] = false,
+                [ScpEscapedKey] = false,
+                [HumanEscapedKey] = false,
             };
-            Server.SessionVariables[SessionKey] = values;
+            Server.SessionVariables[SessionKey] = created;
+            return created;
         }
 
-        private bool ReadBool(string key) => values.TryGetValue(key, out object? value) && value is bool flag && flag;
+        private bool ReadFlag(string key) => values.TryGetValue(key, out object? value) && value is true;
     }
 }

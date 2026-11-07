@@ -62,9 +62,12 @@ def get_release(repository, tag):
     release = api(f"repos/{repository}/releases/tags/{tag}", missing_ok=True)
     if release is not None:
         return release
-    # Draft releases may need to be found through the authenticated release list.
     releases = api(f"repos/{repository}/releases?per_page=100")
     return next((item for item in releases if item["tag_name"] == tag), None)
+
+
+def asset_index(release):
+    return {item["name"]: item for item in release["assets"]}
 
 
 def verify_asset(repository, tag, asset, local):
@@ -75,7 +78,6 @@ def verify_asset(repository, tag, asset, local):
         if asset["digest"] != expected:
             raise ValueError(f"Remote asset checksum differs: {local.name}")
     else:
-        # Older GitHub responses may omit digest; verify downloaded bytes instead.
         with tempfile.TemporaryDirectory() as directory:
             run("gh", "release", "download", tag, "--repo", repository,
                 "--pattern", local.name, "--dir", directory)
@@ -105,7 +107,7 @@ def publish(tag, assets, notes, body):
             raise RuntimeError("The created draft release could not be read")
     if (release.get("body") or "").replace("\r\n", "\n").strip() != body.strip():
         raise ValueError("Existing release notes differ; refusing to overwrite them")
-    current_assets = {item["name"]: item for item in release["assets"]}
+    current_assets = asset_index(release)
     for local in assets:
         if local.name in current_assets:
             verify_asset(repository, tag, current_assets[local.name], local)
@@ -113,8 +115,7 @@ def publish(tag, assets, notes, body):
             run("gh", "release", "upload", tag, str(local), "--repo", repository)
         else:
             raise ValueError("A published release is missing an expected asset; refusing to modify it")
-    release = get_release(repository, tag)
-    current_assets = {item["name"]: item for item in release["assets"]}
+    current_assets = asset_index(get_release(repository, tag))
     for local in assets:
         verify_asset(repository, tag, current_assets[local.name], local)
     if release["draft"]:

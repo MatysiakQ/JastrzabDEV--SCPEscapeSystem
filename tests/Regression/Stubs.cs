@@ -75,7 +75,6 @@ namespace Exiled.API.Features
         public bool IsConnected { get; set; } = true;
         public bool InEscapeZone { get; set; } = true;
         public bool IsAlive => Role.Type != RoleTypeId.Spectator;
-        public bool IsHuman => Role.Team != Team.SCPs && Role.Team != Team.Dead;
         public List<string> Hints { get; } = new();
         public List<string> Broadcasts { get; } = new();
         public Func<RoleTypeId, bool>? AcceptRoleChange { get; set; }
@@ -106,7 +105,6 @@ namespace Exiled.API.Features
     public static class Log
     {
         public static List<string> Errors { get; } = new();
-        public static void Debug(string message) { }
         public static void Error(string message) => Errors.Add(message);
     }
     public static class AuditNative { public static int EscapedClassD; }
@@ -136,7 +134,6 @@ namespace Exiled.API.Features.Roles
             if (owner.AcceptRoleChange != null && !owner.AcceptRoleChange(role)) return;
             foreach (var custom in Exiled.CustomRoles.API.Features.CustomRole.Registered)
                 if (custom.Check(owner) && !custom.KeepRoleOnChangingRole) custom.RemoveRole(owner);
-            // Model of the native RoundSummary.OnServerRoleSet rule inspected in Assembly-CSharp.
             if (reason == Exiled.API.Enums.SpawnReason.Escaped && GetTeam(role) == Team.ChaosInsurgency)
                 AuditNative.EscapedClassD++;
             var old = this;
@@ -195,7 +192,6 @@ namespace Exiled.Events.EventArgs.Server
     {
         public bool IsAllowed { get; set; } = true;
         public List<Exiled.API.Features.Player> Players { get; } = new();
-        public int MaximumRespawnAmount { get; set; } = 10;
     }
     public class EndingRoundEventArgs
     {

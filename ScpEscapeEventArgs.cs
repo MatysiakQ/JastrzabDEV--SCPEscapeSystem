@@ -4,10 +4,9 @@ using PlayerRoles;
 
 namespace ScpEscapeSystem
 {
-    /// <summary>A custom SCP escape, distinct from a Class-D or Scientist escape.</summary>
-    public sealed class ScpEscapingEventArgs : EventArgs
+    public abstract class ScpEscapeEventArgs : EventArgs
     {
-        internal ScpEscapingEventArgs(Player player, RoleTypeId oldRole, string roleName, bool isNetworkTransfer)
+        internal ScpEscapeEventArgs(Player player, RoleTypeId oldRole, string roleName, bool isNetworkTransfer)
         {
             Player = player;
             OldRole = oldRole;
@@ -19,23 +18,23 @@ namespace ScpEscapeSystem
         public RoleTypeId OldRole { get; }
         public string RoleName { get; }
         public bool IsNetworkTransfer { get; }
+    }
+
+    public sealed class ScpEscapingEventArgs : ScpEscapeEventArgs
+    {
+        internal ScpEscapingEventArgs(Player player, RoleTypeId oldRole, string roleName, bool isNetworkTransfer)
+            : base(player, oldRole, roleName, isNetworkTransfer)
+        {
+        }
+
         public bool IsAllowed { get; set; } = true;
     }
 
-    /// <summary>Raised after the Chaos class and registered CustomRole cleanup are confirmed.</summary>
-    public sealed class ScpEscapedEventArgs : EventArgs
+    public sealed class ScpEscapedEventArgs : ScpEscapeEventArgs
     {
         internal ScpEscapedEventArgs(ScpEscapingEventArgs attempt)
+            : base(attempt.Player, attempt.OldRole, attempt.RoleName, attempt.IsNetworkTransfer)
         {
-            Player = attempt.Player;
-            OldRole = attempt.OldRole;
-            RoleName = attempt.RoleName;
-            IsNetworkTransfer = attempt.IsNetworkTransfer;
         }
-
-        public Player Player { get; }
-        public RoleTypeId OldRole { get; }
-        public string RoleName { get; }
-        public bool IsNetworkTransfer { get; }
     }
 }

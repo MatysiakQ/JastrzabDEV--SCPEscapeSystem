@@ -15,11 +15,14 @@ namespace ScpEscapeSystem
 {
     internal sealed class EventHandlers : IDisposable
     {
+        private const float HintSeconds = 5f;
+        private const ushort BroadcastSeconds = 7;
+        private const ushort NetworkTransferBroadcastSeconds = 10;
+
         private readonly Plugin plugin;
         private readonly RoundState state = new RoundState();
-        private readonly HashSet<Player> pending = new HashSet<Player>();
+        private readonly HashSet<Player> activeAttempts = new HashSet<Player>();
         private readonly HashSet<Player> departed = new HashSet<Player>();
-        private readonly HashSet<Role> countedHumanLives = new HashSet<Role>();
         private readonly Dictionary<Player, float> nextAttempt = new Dictionary<Player, float>();
         private readonly Dictionary<Player, float> nextHint = new Dictionary<Player, float>();
         private bool disposed;
@@ -27,19 +30,13 @@ namespace ScpEscapeSystem
         private int generation;
 
         public EventHandlers(Plugin plugin) => this.plugin = plugin;
-        private static bool ActiveRound => Round.IsStarted && !Round.IsEnded;
-        public void OnRoundStarted() => ResetState();
-        public void OnRestartingRound() => ResetState();
-        public void OnWaitingForPlayers() => ResetState();
 
-        private void ResetState()
+        private static bool ActiveRound => Round.IsStarted && !Round.IsEnded;
+        private Config Settings => plugin.Config;
+
+        public void ResetState()
         {
-            generation++;
-            pending.Clear();
-            departed.Clear();
-            countedHumanLives.Clear();
-            nextAttempt.Clear();
-            nextHint.Clear();
+            ClearTracking();
             transferCheckQueued = false;
             state.Reset();
         }
@@ -47,29 +44,21 @@ namespace ScpEscapeSystem
         public void Dispose()
         {
             disposed = true;
-            generation++;
-            pending.Clear();
-            departed.Clear();
-            countedHumanLives.Clear();
-            nextAttempt.Clear();
-            nextHint.Clear();
-            // Keep primitive round state for reloads in this scene.
+            ClearTracking();
         }
-
-        public void Resume() => QueueTransferCheck();
 
         public void OnRespawnedTeam(RespawnedTeamEventArgs ev)
         {
             if (!ActiveRound || state.IsEscapeUnlocked) return;
-            Player[] candidates = ev.Players.Where(p => p != null).ToArray();
+
+            Player[] arrivals = ev.Players.ToArray();
             Defer(() =>
             {
-                if (state.IsEscapeUnlocked || !candidates.Any(p => Present(p) && p.IsAlive &&
-                    (p.Role.Team == Team.FoundationForces || p.Role.Team == Team.ChaosInsurgency))) return;
+                if (state.IsEscapeUnlocked || !arrivals.Any(IsLivingRescuer)) return;
 
-                state.IsEscapeUnlocked = true;
-                foreach (Player player in Player.List.Where(p => Present(p) && p.Role.Team == Team.SCPs).ToArray())
-                    PlayerBroadcast(player, plugin.Config.GatesOpenedBroadcast);
+                state.UnlockEscape();
+                foreach (Player scp in LivingScps())
+                    ShowBroadcast(scp, Settings.GatesOpenedBroadcast);
             });
         }
 
@@ -77,28 +66,19 @@ namespace ScpEscapeSystem
         {
             Player player = ev.Player;
             if (!ActiveRound || !Present(player) || !player.IsAlive || player.Role.Team != Team.SCPs ||
-                player.Role.Type == RoleTypeId.Scp079) return;
+                player.Role.Type == RoleTypeId.Scp079 || !MayEscape(player)) return;
 
-            // Vanilla SCP scenarios default to IsAllowed=false. Policies should use ScpEscaping.
-            bool baseAllowed = plugin.Config.AllowedScps?.Contains(player.Role.Type) == true;
-            if (!baseAllowed && (!plugin.Config.AllowCustomRoles || !MatchingRoles(player).Any())) return;
             ev.IsAllowed = false;
 
             if (!state.IsEscapeUnlocked)
             {
-                float now = Time.realtimeSinceStartup;
-                if (!nextHint.TryGetValue(player, out float next) || now >= next)
-                {
-                    nextHint[player] = now + Config.ValidInterval(plugin.Config.LockedHintInterval, 3f);
-                    string hint = plugin.Config.EscapeLockedHint ?? string.Empty;
-                    if (hint.Length != 0) SafeMessage(() => player.ShowHint(hint, 5f));
-                }
+                ShowLockedHint(player);
                 return;
             }
 
             if (!BeginAttempt(player)) return;
+
             Role original = player.Role;
-            // Finish the native Escaping dispatch before changing anybody's class.
             Defer(() =>
             {
                 try
@@ -107,19 +87,23 @@ namespace ScpEscapeSystem
                         Escape.CanEscape(player.ReferenceHub, out _, out _))
                         TryConvert(player, original, false);
                 }
-                finally { pending.Remove(player); }
+                finally
+                {
+                    activeAttempts.Remove(player);
+                }
             });
         }
 
         public void OnEscaped(EscapedEventArgs ev)
         {
-            if (!ActiveRound || !Present(ev.Player) || ev.EscapeScenario == EscapeScenario.None ||
-                (ev.OldRole.Type != RoleTypeId.ClassD && ev.OldRole.Type != RoleTypeId.Scientist) ||
-                ReferenceEquals(ev.OldRole, ev.Player.Role) ||
-                (SpawnReason)ev.Player.Role.SpawnReason != SpawnReason.Escaped ||
-                (ev.Player.Role.Team != Team.FoundationForces && ev.Player.Role.Team != Team.ChaosInsurgency)) return;
+            Player player = ev.Player;
+            if (!ActiveRound || !Present(player) || ev.EscapeScenario == EscapeScenario.None) return;
+            if (ev.OldRole.Type is not (RoleTypeId.ClassD or RoleTypeId.Scientist)) return;
+            if (ReferenceEquals(ev.OldRole, player.Role) ||
+                (SpawnReason)player.Role.SpawnReason != SpawnReason.Escaped ||
+                !IsRescueTeam(player.Role.Team)) return;
 
-            if (countedHumanLives.Add(ev.OldRole)) state.RecordHumanEscape();
+            state.RecordHumanEscape();
         }
 
         public void OnDied(DiedEventArgs ev) => QueueTransferCheck();
@@ -127,18 +111,21 @@ namespace ScpEscapeSystem
         public void OnSpawned(SpawnedEventArgs ev)
         {
             QueueTransferCheck();
-            Role spawnedRole = ev.Player.Role;
-            if (state.IsEscapeUnlocked && spawnedRole.Team == Team.SCPs)
-                Defer(() =>
-                {
-                    if (SameLife(ev.Player, spawnedRole)) PlayerBroadcast(ev.Player, plugin.Config.GatesOpenedBroadcast);
-                });
+
+            Player player = ev.Player;
+            Role role = player.Role;
+            if (!state.IsEscapeUnlocked || role.Team != Team.SCPs) return;
+
+            Defer(() =>
+            {
+                if (SameLife(player, role)) ShowBroadcast(player, Settings.GatesOpenedBroadcast);
+            });
         }
 
         public void OnLeft(LeftEventArgs ev)
         {
             departed.Add(ev.Player);
-            pending.Remove(ev.Player);
+            activeAttempts.Remove(ev.Player);
             nextAttempt.Remove(ev.Player);
             nextHint.Remove(ev.Player);
             QueueTransferCheck();
@@ -146,47 +133,71 @@ namespace ScpEscapeSystem
 
         public void OnEndingRound(EndingRoundEventArgs ev)
         {
-            if (ev.IsAllowed && state.HasScpEscaped)
-                ev.LeadingTeam = state.HasHumanEscaped ? LeadingTeam.Draw : LeadingTeam.Anomalies;
+            if (!ev.IsAllowed || !state.HasScpEscaped) return;
+
+            ev.LeadingTeam = state.HasHumanEscaped ? LeadingTeam.Draw : LeadingTeam.Anomalies;
         }
 
-        private void QueueTransferCheck()
+        public void QueueTransferCheck()
         {
             if (!ActiveRound || !state.HasScpEscaped || transferCheckQueued || disposed) return;
+
             transferCheckQueued = true;
-            Defer(() =>
-            {
-                transferCheckQueued = false;
-                Player[] scps = LivingScps();
-                if (scps.Length != 1 || scps[0].Role.Type != RoleTypeId.Scp079 || !BeginAttempt(scps[0])) return;
-                Player computer = scps[0];
-                try { TryConvert(computer, computer.Role, true); }
-                finally { pending.Remove(computer); }
-            });
+            Defer(TransferLastComputer);
         }
 
-        private bool TryConvert(Player player, Role original, bool networkTransfer)
+        private void TransferLastComputer()
         {
-            if (!SameLife(player, original)) return false;
-            int currentGeneration = generation;
-            CustomRole[] customRoles = MatchingRoles(player).ToArray();
-            if (!networkTransfer && plugin.Config.AllowedScps?.Contains(original.Type) != true &&
-                (!plugin.Config.AllowCustomRoles || customRoles.Length == 0)) return false;
+            transferCheckQueued = false;
 
-            string roleName = customRoles.FirstOrDefault()?.Name ?? original.Name;
+            Player[] scps = LivingScps();
+            if (scps.Length != 1) return;
+
+            Player computer = scps[0];
+            if (computer.Role.Type != RoleTypeId.Scp079 || !BeginAttempt(computer)) return;
+
+            try
+            {
+                TryConvert(computer, computer.Role, true);
+            }
+            finally
+            {
+                activeAttempts.Remove(computer);
+            }
+        }
+
+        private void TryConvert(Player player, Role original, bool networkTransfer)
+        {
+            if (!SameLife(player, original) || (!networkTransfer && !MayEscape(player))) return;
+
+            int startGeneration = generation;
+            string roleName = MatchingRoles(player).FirstOrDefault()?.Name ?? original.Name;
             var attempt = new ScpEscapingEventArgs(player, original.Type, roleName, networkTransfer);
             plugin.RaiseEscaping(attempt);
-            if (!attempt.IsAllowed || generation != currentGeneration || !SameLife(player, original)) return false;
-            if (networkTransfer && (!state.HasScpEscaped || LivingScps().Length != 1)) return false;
-            customRoles = MatchingRoles(player).ToArray();
 
-            // Keep CustomRoles intact if ChangingRole is subsequently denied.
+            if (!attempt.IsAllowed || generation != startGeneration || !SameLife(player, original)) return;
+            if (networkTransfer && (!state.HasScpEscaped || LivingScps().Length != 1)) return;
+
+            bool ConversionHolds() => generation == startGeneration && IsConverted(player, original);
+
+            CustomRole[] customRoles = MatchingRoles(player).ToArray();
+            if (!ChangeToChaos(player, customRoles) || !ConversionHolds()) return;
+            if (!RemoveCustomRoles(player, customRoles, ConversionHolds)) return;
+
+            state.RecordScpEscape();
+            QueueTransferCheck();
+            AnnounceEscape(roleName, networkTransfer);
+            plugin.RaiseEscaped(new ScpEscapedEventArgs(attempt));
+        }
+
+        private static bool ChangeToChaos(Player player, CustomRole[] customRoles)
+        {
             bool[] keepFlags = customRoles.Select(role => role.KeepRoleOnChangingRole).ToArray();
             try
             {
                 foreach (CustomRole role in customRoles) role.KeepRoleOnChangingRole = true;
-                // Escaped would incorrectly increment the native Class-D escape counter.
                 player.Role.Set(RoleTypeId.ChaosConscript, SpawnReason.ForceClass, RoleSpawnFlags.All);
+                return true;
             }
             catch (Exception error)
             {
@@ -197,12 +208,15 @@ namespace ScpEscapeSystem
             {
                 for (int i = 0; i < customRoles.Length; i++) customRoles[i].KeepRoleOnChangingRole = keepFlags[i];
             }
+        }
 
-            if (generation != currentGeneration || !IsConverted(player, original)) return false;
+        private static bool RemoveCustomRoles(Player player, CustomRole[] customRoles, Func<bool> conversionHolds)
+        {
             foreach (CustomRole role in customRoles)
             {
                 if (!role.Check(player)) continue;
-                bool kills = role.RemovalKillsPlayer;
+
+                bool killsPlayer = role.RemovalKillsPlayer;
                 try
                 {
                     role.RemovalKillsPlayer = false;
@@ -213,60 +227,116 @@ namespace ScpEscapeSystem
                     Log.Error($"SCP escape cleanup failed for {role.Name}: {error}");
                     return false;
                 }
-                finally { role.RemovalKillsPlayer = kills; }
-                if (role.Check(player) || !IsConverted(player, original)) return false;
+                finally
+                {
+                    role.RemovalKillsPlayer = killsPlayer;
+                }
+
+                if (role.Check(player) || !conversionHolds()) return false;
             }
 
-            if (generation != currentGeneration || !IsConverted(player, original)) return false;
-            if (MatchingRoles(player).Any())
-            {
-                Log.Error("SCP escape cleanup left a registered custom role active; success was not recorded.");
-                return false;
-            }
-            state.RecordScpEscape();
-            QueueTransferCheck();
-            string message = networkTransfer ? plugin.Config.Scp079TransferredBroadcast ?? string.Empty :
-                (plugin.Config.ScpEscapedBroadcast ?? string.Empty).Replace("{scp}", roleName);
-            if (message.Length != 0) SafeMessage(() => Map.Broadcast((ushort)(networkTransfer ? 10 : 7), message));
-            plugin.RaiseEscaped(new ScpEscapedEventArgs(attempt));
-            return true;
+            if (!MatchingRoles(player).Any()) return true;
+
+            Log.Error("SCP escape cleanup left a registered custom role active; success was not recorded.");
+            return false;
+        }
+
+        private void AnnounceEscape(string roleName, bool networkTransfer)
+        {
+            string template = networkTransfer ? Settings.Scp079TransferredBroadcast : Settings.ScpEscapedBroadcast;
+            if (string.IsNullOrEmpty(template)) return;
+
+            string message = networkTransfer ? template : template.Replace("{scp}", roleName);
+            ushort seconds = networkTransfer ? NetworkTransferBroadcastSeconds : BroadcastSeconds;
+            SafeMessage(() => Map.Broadcast(seconds, message));
+        }
+
+        private void ShowLockedHint(Player player)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (nextHint.TryGetValue(player, out float next) && now < next) return;
+
+            nextHint[player] = now + Settings.LockedHintInterval;
+            string hint = Settings.EscapeLockedHint;
+            if (!string.IsNullOrEmpty(hint)) SafeMessage(() => player.ShowHint(hint, HintSeconds));
         }
 
         private bool BeginAttempt(Player player)
         {
             float now = Time.realtimeSinceStartup;
-            if (pending.Contains(player) || (nextAttempt.TryGetValue(player, out float next) && now < next)) return false;
-            nextAttempt[player] = now + Config.ValidInterval(plugin.Config.EscapeRetrySeconds, 2f);
-            return pending.Add(player);
+            if ((nextAttempt.TryGetValue(player, out float next) && now < next) || !activeAttempts.Add(player))
+                return false;
+
+            nextAttempt[player] = now + Settings.EscapeRetrySeconds;
+            return true;
+        }
+
+        private bool MayEscape(Player player) =>
+            Settings.AllowedScps.Contains(player.Role.Type) ||
+            (Settings.AllowCustomRoles && MatchingRoles(player).Any());
+
+        private void ClearTracking()
+        {
+            generation++;
+            activeAttempts.Clear();
+            departed.Clear();
+            nextAttempt.Clear();
+            nextHint.Clear();
         }
 
         private bool Present(Player player) => player != null && player.IsConnected && !departed.Contains(player);
-        private bool SameLife(Player player, Role original) => !disposed && ActiveRound && Present(player) && player.IsAlive && ReferenceEquals(player.Role, original);
-        private bool IsConverted(Player player, Role original) => !disposed && ActiveRound && Present(player) && player.IsAlive &&
-            !ReferenceEquals(player.Role, original) && player.Role.Type == RoleTypeId.ChaosConscript;
-        private Player[] LivingScps() => Player.List.Where(p => Present(p) && p.IsAlive && p.Role.Team == Team.SCPs).ToArray();
-        private static IEnumerable<CustomRole> MatchingRoles(Player player) => CustomRole.Registered.Where(role => role.Check(player));
+
+        private bool IsLiving(Player player) => !disposed && ActiveRound && Present(player) && player.IsAlive;
+
+        private bool IsLivingRescuer(Player player) => IsLiving(player) && IsRescueTeam(player.Role.Team);
+
+        private bool SameLife(Player player, Role original) =>
+            IsLiving(player) && ReferenceEquals(player.Role, original);
+
+        private bool IsConverted(Player player, Role original) =>
+            IsLiving(player) && !ReferenceEquals(player.Role, original) && player.Role.Type == RoleTypeId.ChaosConscript;
+
+        private Player[] LivingScps() =>
+            Player.List.Where(player => IsLiving(player) && player.Role.Team == Team.SCPs).ToArray();
+
+        private static bool IsRescueTeam(Team team) => team is Team.FoundationForces or Team.ChaosInsurgency;
+
+        private static IEnumerable<CustomRole> MatchingRoles(Player player) =>
+            CustomRole.Registered.Where(role => role.Check(player));
 
         private void Defer(Action callback)
         {
-            int currentGeneration = generation;
+            int scheduledGeneration = generation;
             Timing.CallDelayed(0f, () =>
             {
-                if (disposed || generation != currentGeneration || !ActiveRound) return;
-                try { callback(); }
-                catch (Exception error) { Log.Error($"SCP escape deferred operation failed: {error}"); }
+                if (disposed || generation != scheduledGeneration || !ActiveRound) return;
+
+                try
+                {
+                    callback();
+                }
+                catch (Exception error)
+                {
+                    Log.Error($"SCP escape deferred operation failed: {error}");
+                }
             });
         }
 
-        private static void PlayerBroadcast(Player player, string? message)
+        private static void ShowBroadcast(Player player, string message)
         {
-            if (!string.IsNullOrEmpty(message)) SafeMessage(() => player.Broadcast(7, message!));
+            if (!string.IsNullOrEmpty(message)) SafeMessage(() => player.Broadcast(BroadcastSeconds, message));
         }
 
         private static void SafeMessage(Action show)
         {
-            try { show(); }
-            catch (Exception error) { Log.Error($"SCP escape message failed: {error}"); }
+            try
+            {
+                show();
+            }
+            catch (Exception error)
+            {
+                Log.Error($"SCP escape message failed: {error}");
+            }
         }
     }
 }

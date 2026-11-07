@@ -1,82 +1,65 @@
 using System;
 using Exiled.API.Features;
+using PlayerEvents = Exiled.Events.Handlers.Player;
+using ServerEvents = Exiled.Events.Handlers.Server;
 
 namespace ScpEscapeSystem
 {
     public class Plugin : Plugin<Config>
     {
+        private EventHandlers? handlers;
+
         public override string Name => "ScpEscapeSystem";
         public override string Prefix => "scp_escape_system";
         public override string Author => "Matysiak";
         public override Version Version => new Version(1, 4, 0);
         public override Version RequiredExiledVersion => new Version(9, 12, 6);
 
-        public static Plugin Instance { get; private set; } = null!;
-        private EventHandlers? handlers;
-
-        /// <summary>Cancellable attempt, after the vanilla escape event has finished dispatching.</summary>
         public event EventHandler<ScpEscapingEventArgs>? ScpEscaping;
-        /// <summary>Confirmed Chaos conversion and completed registered CustomRole cleanup.</summary>
         public event EventHandler<ScpEscapedEventArgs>? ScpEscaped;
 
         public override void OnEnabled()
         {
-            Instance = this;
             Config.Normalize();
             handlers = new EventHandlers(this);
-            Exiled.Events.Handlers.Player.Escaping += handlers.OnEscaping;
-            Exiled.Events.Handlers.Player.Escaped += handlers.OnEscaped;
-            Exiled.Events.Handlers.Player.Died += handlers.OnDied;
-            Exiled.Events.Handlers.Player.Spawned += handlers.OnSpawned;
-            Exiled.Events.Handlers.Player.Left += handlers.OnLeft;
-            Exiled.Events.Handlers.Server.RespawnedTeam += handlers.OnRespawnedTeam;
-            Exiled.Events.Handlers.Server.EndingRound += handlers.OnEndingRound;
-            Exiled.Events.Handlers.Server.RoundStarted += handlers.OnRoundStarted;
-            Exiled.Events.Handlers.Server.RestartingRound += handlers.OnRestartingRound;
-            Exiled.Events.Handlers.Server.WaitingForPlayers += handlers.OnWaitingForPlayers;
-            Exiled.Events.Handlers.Server.ReloadedConfigs += OnReloadedConfigs;
-            handlers.Resume();
+            Subscribe(handlers);
+            ServerEvents.ReloadedConfigs += OnReloadedConfigs;
+            handlers.QueueTransferCheck();
             base.OnEnabled();
         }
 
         public override void OnDisabled()
         {
+            ServerEvents.ReloadedConfigs -= OnReloadedConfigs;
             if (handlers != null)
             {
-                Exiled.Events.Handlers.Player.Escaping -= handlers.OnEscaping;
-                Exiled.Events.Handlers.Player.Escaped -= handlers.OnEscaped;
-                Exiled.Events.Handlers.Player.Died -= handlers.OnDied;
-                Exiled.Events.Handlers.Player.Spawned -= handlers.OnSpawned;
-                Exiled.Events.Handlers.Player.Left -= handlers.OnLeft;
-                Exiled.Events.Handlers.Server.RespawnedTeam -= handlers.OnRespawnedTeam;
-                Exiled.Events.Handlers.Server.EndingRound -= handlers.OnEndingRound;
-                Exiled.Events.Handlers.Server.RoundStarted -= handlers.OnRoundStarted;
-                Exiled.Events.Handlers.Server.RestartingRound -= handlers.OnRestartingRound;
-                Exiled.Events.Handlers.Server.WaitingForPlayers -= handlers.OnWaitingForPlayers;
-                Exiled.Events.Handlers.Server.ReloadedConfigs -= OnReloadedConfigs;
+                Unsubscribe(handlers);
                 handlers.Dispose();
                 handlers = null;
             }
+
             ScpEscaping = null;
             ScpEscaped = null;
-            if (ReferenceEquals(Instance, this)) Instance = null!;
             base.OnDisabled();
         }
-
-        private void OnReloadedConfigs() => Config.Normalize();
 
         internal void RaiseEscaping(ScpEscapingEventArgs ev)
         {
             if (ScpEscaping == null) return;
+
             bool allowed = true;
             foreach (EventHandler<ScpEscapingEventArgs> listener in ScpEscaping.GetInvocationList())
             {
-                try { listener(this, ev); }
+                try
+                {
+                    listener(this, ev);
+                }
                 catch (Exception error)
                 {
                     ev.IsAllowed = false;
                     Log.Error($"ScpEscaping listener failed; attempt cancelled: {error}");
                 }
+
                 allowed &= ev.IsAllowed;
                 ev.IsAllowed = allowed;
             }
@@ -85,11 +68,48 @@ namespace ScpEscapeSystem
         internal void RaiseEscaped(ScpEscapedEventArgs ev)
         {
             if (ScpEscaped == null) return;
+
             foreach (EventHandler<ScpEscapedEventArgs> listener in ScpEscaped.GetInvocationList())
             {
-                try { listener(this, ev); }
-                catch (Exception error) { Log.Error($"ScpEscaped listener failed: {error}"); }
+                try
+                {
+                    listener(this, ev);
+                }
+                catch (Exception error)
+                {
+                    Log.Error($"ScpEscaped listener failed: {error}");
+                }
             }
+        }
+
+        private void OnReloadedConfigs() => Config.Normalize();
+
+        private static void Subscribe(EventHandlers handlers)
+        {
+            PlayerEvents.Escaping += handlers.OnEscaping;
+            PlayerEvents.Escaped += handlers.OnEscaped;
+            PlayerEvents.Died += handlers.OnDied;
+            PlayerEvents.Spawned += handlers.OnSpawned;
+            PlayerEvents.Left += handlers.OnLeft;
+            ServerEvents.RespawnedTeam += handlers.OnRespawnedTeam;
+            ServerEvents.EndingRound += handlers.OnEndingRound;
+            ServerEvents.RoundStarted += handlers.ResetState;
+            ServerEvents.RestartingRound += handlers.ResetState;
+            ServerEvents.WaitingForPlayers += handlers.ResetState;
+        }
+
+        private static void Unsubscribe(EventHandlers handlers)
+        {
+            PlayerEvents.Escaping -= handlers.OnEscaping;
+            PlayerEvents.Escaped -= handlers.OnEscaped;
+            PlayerEvents.Died -= handlers.OnDied;
+            PlayerEvents.Spawned -= handlers.OnSpawned;
+            PlayerEvents.Left -= handlers.OnLeft;
+            ServerEvents.RespawnedTeam -= handlers.OnRespawnedTeam;
+            ServerEvents.EndingRound -= handlers.OnEndingRound;
+            ServerEvents.RoundStarted -= handlers.ResetState;
+            ServerEvents.RestartingRound -= handlers.ResetState;
+            ServerEvents.WaitingForPlayers -= handlers.ResetState;
         }
     }
 }
